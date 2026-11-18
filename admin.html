@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin · Blessed Digital Store</title><meta name="robots" content="noindex"><meta name="theme-color" content="#0B1F3A">
+<link rel="stylesheet" href="style.css"></head><body>
+<header><div class="wrap bar"><span class="logo"><b>B</b>Store admin</span><button class="ib" id="out" hidden>Sign out</button></div></header>
+<main class="wrap adm"><div id="login" hidden><h2 class="sec">Admin sign in</h2>
+<label for="em">Email</label><input class="f" id="em" type="email" autocomplete="username"><label for="pw">Password</label><input class="f" id="pw" type="password" autocomplete="current-password">
+<div class="err" id="le" role="alert"></div><button class="btn" style="margin-top:14px" id="go">Sign in</button></div>
+<div id="app" hidden><div class="tabs" id="tabs"></div><div id="view"></div></div></main>
+<div class="sheet" id="sheet"><div class="panel" id="panel"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script><script src="admin.js"></script></body></html>
