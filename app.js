@@ -117,9 +117,9 @@ async function auth(up) {
   account();
 }
 async function lessons(cid) {
-  const [l, pr] = await Promise.all([sb.from("course_lessons").select("id,title").eq("course_id", cid).order("position"), sb.from("lesson_progress").select("lesson_id")]);
+  const [l, pr] = await Promise.all([sb.from("course_lessons").select("id,title,video_url,content").eq("course_id", cid).order("position"), sb.from("lesson_progress").select("lesson_id")]);
   const done = new Set((pr.data || []).map(x => x.lesson_id));
-  $("#ls-" + cid).innerHTML = `<p class="note">${done.size} of ${l.data.length} lessons complete</p>` + l.data.map(x => `<label class="lesson"><input type="checkbox" data-les="${x.id}" data-c="${cid}" ${done.has(x.id) ? "checked" : ""}> ${esc(x.title)}</label>`).join("");
+  $("#ls-" + cid).innerHTML = `<p class="note">${done.size} of ${l.data.length} lessons complete</p>` + l.data.map(x => `<div class="lesson"><label style="flex:1"><input type="checkbox" data-les="${x.id}" data-c="${cid}" ${done.has(x.id) ? "checked" : ""}> ${esc(x.title)}</label>${/^https:\/\//.test(x.video_url || "") ? `<a class="btn sm" href="${esc(x.video_url)}" target="_blank" rel="noopener">Watch</a>` : ""}</div>${x.content ? `<p class="note">${esc(x.content)}</p>` : ""}`).join("");
 }
 async function download(pid) {
   const { data, error } = await sb.functions.invoke("get-download", { body: { productId: pid } });
@@ -146,11 +146,13 @@ document.addEventListener("keydown", ev => { if (ev.key == "Escape") close_() })
 window.addEventListener("offline", () => toast("You are offline. Saved progress is kept."));
 
 // ---------- PWA install ----------
+const instOff = () => Date.now() - ld("bds_inst_no", 0) < 2592e5;
 let dp; const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-addEventListener("beforeinstallprompt", ev => { ev.preventDefault(); dp = ev; $("#install").hidden = false; if (!ld("bds_inst_no", 0)) $("#instbar").hidden = false });
+addEventListener("beforeinstallprompt", ev => { ev.preventDefault(); dp = ev; $("#install").hidden = false; $("#instgo").hidden = false; $("#insttxt").textContent = "Get faster access to your eBooks, courses, and digital resources."; if (!instOff()) setTimeout(() => { if (dp) $("#instbar").hidden = false }, 3000) });
 $("#instgo").onclick = async () => { if (dp) { dp.prompt(); await dp.userChoice; dp = null } $("#instbar").hidden = true };
-$("#instno").onclick = () => { sv("bds_inst_no", 1); $("#instbar").hidden = true };
+$("#instno").onclick = () => { sv("bds_inst_no", Date.now()); $("#instbar").hidden = true };
 $("#install").onclick = () => { if (dp) dp.prompt(); else toast("In your browser menu, choose Install app or Add to Home screen.") };
-if (ios && !standalone && !ld("bds_inst_no", 0)) { $("#insttxt").textContent = "On iPhone: tap Share, then Add to Home Screen."; $("#instgo").hidden = true; $("#instbar").hidden = false }
+if (ios && !standalone && !instOff()) { $("#insttxt").textContent = "On iPhone: tap Share, then Add to Home Screen."; $("#instgo").hidden = true; $("#instbar").hidden = false }
+if (!ios && !standalone) setTimeout(() => { if (!dp && !instOff()) { $("#insttxt").textContent = "Open your browser menu and choose Install app or Add to Home screen."; $("#instgo").hidden = true; $("#instbar").hidden = false } }, 8000);
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
 init();
