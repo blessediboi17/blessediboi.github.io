@@ -58,7 +58,7 @@ function drawResume() {
   const d = ld(DK, null), el = $("#resume"), p = d && P.find(x => x.id == d.pid);
   el.innerHTML = p ? `<div class="banner"><div><b>Welcome back. You have an unfinished purchase.</b><br><span class="meta">${esc(p.name)}${d.order ? ` · Order <span class="ordno">${esc(d.order)}</span>` : ""}</span></div><button class="btn sm" data-resume>Resume Checkout</button><button class="btn sm ghost" data-discard>Discard</button></div>` : "";
 }
-function buy(id) { let d = ld(DK, null); if (!d || d.pid != id) { d = { pid: id, name: "", phone: "", email: "", txn: "", order: null }; sv(DK, d) } checkout() }
+async function buy(id) { let d = ld(DK, null); if (!d || d.pid != id) { d = { pid: id, name: "", phone: "", email: "", txn: "", order: null }; sv(DK, d) } const { data: { session } } = await sb.auth.getSession(); if (!session) return authView("Create an account or sign in to buy. Your purchase, download and notifications are kept in your account."); checkout() }
 function checkout() {
   const d = ld(DK, null), p = d && P.find(x => x.id == d.pid); if (!p) return;
   const person = `<label for="n">Full name</label><input class="f" id="n" autocomplete="name" value="${esc(d.name)}" data-f="name"><label for="ph">Phone number</label><input class="f" id="ph" type="tel" autocomplete="tel" value="${esc(d.phone)}" data-f="phone"><label for="em">Email <small>(optional)</small></label><input class="f" id="em" type="email" autocomplete="email" value="${esc(d.email)}" data-f="email">`;
@@ -97,16 +97,18 @@ const LABEL = { awaiting_payment: ["Awaiting Payment", "Send the Mobile Money pa
 function track(pre) { open_(head("Track your order") + `<label for="to">Order number</label><input class="f" id="to" value="${esc(pre || "")}" placeholder="BDS-123456"><label for="tp">Phone number used at checkout</label><input class="f" id="tp" type="tel"><button class="btn" style="width:100%;margin-top:14px" data-lookup>Check status</button><div id="tr" role="status" style="margin-top:14px"></div>`) }
 async function lookup() {
   const { data, error } = await sb.rpc("track_order", { p_order: $("#to").value, p_phone: $("#tp").value }), o = data?.[0];
-  $("#tr").innerHTML = error ? `<div class="err">Could not check right now. Try again.</div>` : o ? `<div class="pay"><span class="st">${LABEL[o.status][0]}</span><p style="margin:8px 0 0">${LABEL[o.status][1]}</p>${o.rejection_reason ? `<p><b>Reason:</b> ${esc(o.rejection_reason)}</p><button class="btn sm" data-resubmit="${esc(o.order_number)}">Resubmit payment</button>` : ""}</div>` : `<div class="err">No order found. Check the number and the phone.</div>`;
+  $("#tr").innerHTML = error ? `<div class="err">Could not check right now. Try again.</div>` : o ? `<div class="pay"><span class="st">${LABEL[o.status][0]}</span><p style="margin:8px 0 0">${LABEL[o.status][1]}</p>${o.status == "approved" ? '<button class="btn sm" data-openacct>Open my library</button>' : ""}${o.rejection_reason ? `<p><b>Reason:</b> ${esc(o.rejection_reason)}</p><button class="btn sm" data-resubmit="${esc(o.order_number)}">Resubmit payment</button>` : ""}</div>` : `<div class="err">No order found. Check the number and the phone.</div>`;
 }
 function resubmit(num) { const d = ld(DK, null) || {}; sv(DK, { ...d, order: num, phone: $("#tp").value, pid: d.pid || (P[0] && P[0].id), txn: "" }); checkout() }
 
 // ---------- account and library ----------
+function authView(msg = "") { open_(head("Sign in") + (msg ? `<p class="note">${esc(msg)}</p>` : "") + `<label for="an">Full name <small>(new accounts)</small></label><input class="f" id="an"><label for="ae">Email</label><input class="f" id="ae" type="email" autocomplete="username"><label for="ap">Password <small>(8+ characters)</small></label><input class="f" id="ap" type="password" autocomplete="current-password"><div class="err" id="er" role="alert"></div><div class="acts" style="margin-top:14px"><button class="btn" data-signin>Sign in</button><button class="btn ghost" data-signup>Create account</button></div>`); }
 async function account() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) return open_(head("Sign in") + `<label for="an">Full name <small>(new accounts)</small></label><input class="f" id="an"><label for="ae">Email</label><input class="f" id="ae" type="email" autocomplete="username"><label for="ap">Password <small>(8+ characters)</small></label><input class="f" id="ap" type="password" autocomplete="current-password"><div class="err" id="er" role="alert"></div><div class="acts" style="margin-top:14px"><button class="btn" data-signin>Sign in</button><button class="btn ghost" data-signup>Create account</button></div>`);
+  if (!session) return authView();
   const [lib, nt] = await Promise.all([sb.from("customer_library").select("product_id,revoked,products(id,name,type)").eq("revoked", false), sb.from("notifications").select("title,body,created_at").order("created_at", { ascending: false }).limit(5)]);
   open_(head("My library") + `<p class="meta">${esc(session.user.email)}</p>${nt.data?.length ? "<h3>Notifications</h3>" + nt.data.map(n => `<p class="note"><b>${esc(n.title)}</b>${n.body ? " · " + esc(n.body) : ""}</p>`).join("") : ""}<h3 style="margin-top:14px">My purchases</h3>${lib.data?.length ? lib.data.map(l => `<div class="row"><div><b>${esc(l.products.name)}</b><span class="meta">${l.products.type}</span></div>${l.products.type == "course" ? `<button class="btn sm" data-lessons="${l.products.id}">Resume Course</button>` : `<button class="btn sm" data-dl="${l.products.id}">Download</button>`}</div><div id="ls-${l.products.id}"></div>`).join("") : `<p class="empty">Nothing here yet. Approved purchases appear here.</p>`}<h3>Link earlier orders</h3><p class="note">Bought without an account? Enter the phone number you used at checkout.</p><input class="f" id="cp" type="tel" placeholder="Phone number"><button class="btn sm" style="margin-top:8px" data-claim>Link my orders</button><div style="margin-top:18px"><button class="btn ghost sm" data-signout>Sign out</button></div>`);
+  sb.from("notifications").update({ read: true }).eq("read", false).then(() => checkNotes(true));
 }
 async function auth(up) {
   const email = $("#ae").value.trim(), password = $("#ap").value, er = $("#er");
@@ -114,7 +116,7 @@ async function auth(up) {
   const r = up ? await sb.auth.signUp({ email, password, options: { data: { full_name: $("#an").value } } }) : await sb.auth.signInWithPassword({ email, password });
   if (r.error) return er.textContent = r.error.message;
   if (up && !r.data.session) return er.textContent = "Check your email to confirm your account, then sign in.";
-  account();
+  checkNotes(true); ld(DK, null) ? checkout() : account();
 }
 async function lessons(cid) {
   const [l, pr] = await Promise.all([sb.from("course_lessons").select("id,title,video_url,content").eq("course_id", cid).order("position"), sb.from("lesson_progress").select("lesson_id")]);
@@ -122,18 +124,34 @@ async function lessons(cid) {
   $("#ls-" + cid).innerHTML = `<p class="note">${done.size} of ${l.data.length} lessons complete</p>` + l.data.map(x => `<div class="lesson"><label style="flex:1"><input type="checkbox" data-les="${x.id}" data-c="${cid}" ${done.has(x.id) ? "checked" : ""}> ${esc(x.title)}</label>${/^https:\/\//.test(x.video_url || "") ? `<a class="btn sm" href="${esc(x.video_url)}" target="_blank" rel="noopener">Watch</a>` : ""}</div>${x.content ? `<p class="note">${esc(x.content)}</p>` : ""}`).join("");
 }
 async function download(pid) {
-  const { data, error } = await sb.functions.invoke("get-download", { body: { productId: pid } });
-  if (data?.url) window.open(data.url, "_blank"); else toast(error ? "Download not available. Try again." : data?.error || "Download not available.");
+  toast("Preparing your download…");
+  const r = await sb.rpc("get_download_path", { p_product: pid });
+  if (r.error || !r.data) return toast(/not available/i.test(r.error?.message || "") ? "The file is not uploaded yet. Please contact support." : /No access/i.test(r.error?.message || "") ? "You do not have access to this product." : "Download not available. Try again.");
+  const s = await sb.storage.from("product-files").createSignedUrl(r.data, 120, { download: true });
+  if (s.error || !s.data?.signedUrl) return toast("Could not create the download link. Try again.");
+  const link = document.createElement("a"); link.href = s.data.signedUrl; link.rel = "noopener"; document.body.append(link); link.click(); link.remove();
+}
+
+// ---------- notifications (shown in the app; email is not configured) ----------
+let lastN = 0;
+async function checkNotes(quiet) {
+  const { data: { session } } = await sb.auth.getSession(), b = $("#acct"); b.querySelector(".dot")?.remove();
+  if (!session) { lastN = 0; return }
+  const { data } = await sb.from("notifications").select("title").eq("read", false).order("created_at", { ascending: false });
+  const n = data?.length || 0;
+  if (n) b.insertAdjacentHTML("beforeend", `<span class="dot" aria-label="${n} new notifications">${n}</span>`);
+  if (n > lastN && !quiet) toast(data[0].title);
+  lastN = n;
 }
 
 // ---------- events ----------
 document.addEventListener("click", async ev => {
   const t = ev.target.closest("button,.sheet"), D = t?.dataset; if (!t) return;
   if (D.c) { cat = D.c; drawChips(); drawGrid() } else if (D.buy) buy(D.buy); else if (D.view) view(D.view);
-  else if (D.resume !== undefined) checkout(); else if (D.discard !== undefined) { if (confirm("Discard this unfinished purchase? Your order stays on file if you already created it.")) { localStorage.removeItem(DK); drawResume() } }
+  else if (D.resume !== undefined) buy((ld(DK, {})).pid); else if (D.discard !== undefined) { if (confirm("Discard this unfinished purchase? Your order stays on file if you already created it.")) { localStorage.removeItem(DK); drawResume() } }
   else if (D.order !== undefined) makeOrder(); else if (D.submit !== undefined) submitPay();
   else if (D.track !== undefined || t.id == "track") track(D.track); else if (D.lookup !== undefined) lookup(); else if (D.resubmit) resubmit(D.resubmit);
-  else if (t.id == "acct") account(); else if (D.signin !== undefined) auth(false); else if (D.signup !== undefined) auth(true);
+  else if (t.id == "acct" || D.openacct !== undefined) account(); else if (D.signin !== undefined) auth(false); else if (D.signup !== undefined) auth(true);
   else if (D.signout !== undefined) { await sb.auth.signOut(); close_() }
   else if (D.lessons) lessons(D.lessons); else if (D.dl) download(D.dl);
   else if (D.claim !== undefined) { const { data, error } = await sb.rpc("claim_orders", { p_phone: $("#cp").value }); toast(error ? "Could not link orders." : `Linked ${data} order(s).`); account() }
@@ -155,4 +173,4 @@ $("#install").onclick = () => { if (dp) dp.prompt(); else toast("In your browser
 if (ios && !standalone && !instOff()) { $("#insttxt").textContent = "On iPhone: tap Share, then Add to Home Screen."; $("#instgo").hidden = true; $("#instbar").hidden = false }
 if (!ios && !standalone) setTimeout(() => { if (!dp && !instOff()) { $("#insttxt").textContent = "Open your browser menu and choose Install app or Add to Home screen."; $("#instgo").hidden = true; $("#instbar").hidden = false } }, 8000);
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
-init();
+init(); checkNotes(); sb.auth.onAuthStateChange(() => checkNotes(true)); setInterval(checkNotes, 60000);
