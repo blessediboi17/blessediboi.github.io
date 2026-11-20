@@ -27,10 +27,10 @@ function flow(p) {
 
 // ---------- catalog ----------
 async function init() {
-  const [a, b, c] = await Promise.all([
+  const [a, b, c] = await Promise.race([new Promise(r => setTimeout(() => r([{ error: 1 }]), 10000)), Promise.all([
     sb.from("products").select("*,categories(name)").eq("is_published", true).order("created_at"),
     sb.from("categories").select("name").order("id"),
-    sb.from("site_settings").select("key,value").eq("is_public", true)]).catch(() => [{ error: 1 }]);
+    sb.from("site_settings").select("key,value").eq("is_public", true)]).catch(() => [{ error: 1 }])]);
   if (a.error) { const c0 = ld("bds_catalog", null); if (c0) { ({ P, CATS, S } = c0); toast("Offline: showing saved catalog") } else $("#grid").innerHTML = `<div class="empty" style="grid-column:1/-1">Could not load products. Check your connection.<br><button class="btn sm" style="margin-top:10px" onclick="init()">Retry</button></div>` }
   else { P = a.data; CATS = ["All", ...b.data.map(x => x.name)]; (c.data || []).forEach(r => S[r.key] = r.value); sv("bds_catalog", { P, CATS, S }) }
   $("#support").textContent = S.support_contact || "Contact details are set in admin settings.";
@@ -173,4 +173,4 @@ $("#install").onclick = () => { if (dp) dp.prompt(); else toast("In your browser
 if (ios && !standalone && !instOff()) { $("#insttxt").textContent = "On iPhone: tap Share, then Add to Home Screen."; $("#instgo").hidden = true; $("#instbar").hidden = false }
 if (!ios && !standalone) setTimeout(() => { if (!dp && !instOff()) { $("#insttxt").textContent = "Open your browser menu and choose Install app or Add to Home screen."; $("#instgo").hidden = true; $("#instbar").hidden = false } }, 8000);
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
-init(); checkNotes(); sb.auth.onAuthStateChange(() => checkNotes(true)); setInterval(checkNotes, 60000);
+init(); checkNotes(); sb.auth.onAuthStateChange(() => setTimeout(() => checkNotes(true), 0)); setInterval(checkNotes, 60000);
